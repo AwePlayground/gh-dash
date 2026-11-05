@@ -90,7 +90,7 @@ type PullRequestData struct {
 	Repository       Repository
 	Assignees        Assignees            `graphql:"assignees(first: 3)"`
 	Comments         Comments             `graphql:"comments"`
-	ReviewThreads    ReviewThreads        `graphql:"reviewThreads"`
+	ReviewThreads    ReviewThreads        `graphql:"reviewThreads(first: 100)"`
 	Reviews          ReviewsNumber        `graphql:"reviews"`
 	ReviewRequests   ReviewRequestsNumber `graphql:"reviewRequests"`
 	IsDraft          bool
@@ -272,8 +272,24 @@ type Comments struct {
 	TotalCount int
 }
 
+type ReviewThreadStatus struct {
+	IsResolved bool
+}
+
 type ReviewThreads struct {
 	TotalCount int
+	Nodes      []ReviewThreadStatus
+	PageInfo   PageInfo
+}
+
+func (threads ReviewThreads) UnresolvedCount() (int, bool) {
+	count := 0
+	for _, thread := range threads.Nodes {
+		if !thread.IsResolved {
+			count++
+		}
+	}
+	return count, threads.PageInfo.HasNextPage
 }
 
 type Review struct {

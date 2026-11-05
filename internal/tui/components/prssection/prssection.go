@@ -265,6 +265,10 @@ func GetSectionColumns(
 		dLayout.NumComments,
 		sLayout.NumComments,
 	)
+	unresolvedThreadsLayout := config.MergeColumnConfigs(
+		dLayout.UnresolvedThreads,
+		sLayout.UnresolvedThreads,
+	)
 	reviewStatusLayout := config.MergeColumnConfigs(
 		dLayout.ReviewStatus,
 		sLayout.ReviewStatus,
@@ -305,6 +309,11 @@ func GetSectionColumns(
 				Title:  constants.CommentsIcon,
 				Width:  utils.IntPtr(4),
 				Hidden: numCommentsLayout.Hidden,
+			},
+			{
+				Title:  "",
+				Width:  utils.IntPtr(6),
+				Hidden: unresolvedThreadsLayout.Hidden,
 			},
 			{
 				Title:  "󰯢",
@@ -375,6 +384,11 @@ func GetSectionColumns(
 			Title:  constants.CommentsIcon,
 			Width:  utils.IntPtr(4),
 			Hidden: numCommentsLayout.Hidden,
+		},
+		{
+			Title:  "",
+			Width:  utils.IntPtr(6),
+			Hidden: unresolvedThreadsLayout.Hidden,
 		},
 		{
 			Title:  "󰯢",

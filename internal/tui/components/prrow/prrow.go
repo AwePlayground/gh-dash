@@ -43,6 +43,18 @@ func (pr *PullRequest) renderNumComments() string {
 		))
 }
 
+func (pr *PullRequest) renderUnresolvedThreads() string {
+	if pr.Data.Primary == nil {
+		return "-"
+	}
+	count, incomplete := pr.Data.Primary.ReviewThreads.UnresolvedCount()
+	value := fmt.Sprint(count)
+	if incomplete {
+		value += "+"
+	}
+	return pr.getTextStyle().Render(value)
+}
+
 func (pr *PullRequest) renderReviewStatus() string {
 	if pr.Data.Primary == nil {
 		return "-"
@@ -398,6 +410,7 @@ func (pr *PullRequest) ToTableRow(isSelected bool) table.Row {
 			pr.renderAssignees(),
 			pr.renderBaseName(),
 			pr.renderNumComments(),
+			pr.renderUnresolvedThreads(),
 			pr.renderReviewStatus(),
 			pr.renderCiStatus(),
 			pr.RenderLines(isSelected),
@@ -415,6 +428,7 @@ func (pr *PullRequest) ToTableRow(isSelected bool) table.Row {
 		pr.renderAssignees(),
 		pr.renderBaseName(),
 		pr.renderNumComments(),
+		pr.renderUnresolvedThreads(),
 		pr.renderReviewStatus(),
 		pr.renderCiStatus(),
 		pr.RenderLines(isSelected),

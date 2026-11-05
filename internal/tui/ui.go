@@ -68,6 +68,8 @@ type Model struct {
 	taskSpinner      spinner.Model
 	tasks            map[string]context.Task
 	positionOverride string // "" means no override, "right" or "bottom"
+	prActionMenu     *PRActionMenu
+	prPreviewFocused bool
 	mode             Mode
 }
 
@@ -204,6 +206,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		log.Info("Key pressed", "key", msg.String())
 		m.ctx.Error = nil
+		if m.prActionMenu != nil {
+			switch msg.String() {
+			case "esc":
+				m.prActionMenu = nil
+			case "enter":
+				action := m.prActionMenu.Selected()
+				m.prActionMenu = nil
+				if pr, ok := m.getCurrRowData().(*prrow.Data); ok && pr.Primary != nil {
+					return m, m.runPRAction(action, pr)
+				}
+			default:
+				if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
+					m.prActionMenu.Update(keyMsg)
+				}
+			}
+			return m, nil
+		}
 
 		if currSection != nil && (currSection.IsSearchFocused() ||
 			currSection.IsPromptConfirmationFocused()) {
@@ -241,6 +260,36 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		if m.prPreviewFocused {
+			switch msg.String() {
+			case "esc", "enter":
+				m.prPreviewFocused = false
+				return m, nil
+			case "down", "j":
+				m.sidebar.ScrollDown()
+				return m, nil
+			case "up", "k":
+				m.sidebar.ScrollUp()
+				return m, nil
+			}
+		} else if m.ctx.View == config.PRsView && msg.String() == "enter" {
+			if pr, ok := currRowData.(*prrow.Data); ok && pr.Primary != nil {
+				if !m.sidebar.IsOpen {
+					m.sidebar.IsOpen = true
+					m.syncMainContentDimensions()
+					m.syncProgramContext()
+					m.syncSidebar()
+				}
+				m.prPreviewFocused = true
+			}
+			return m, nil
+		}
+		if m.ctx.View == config.PRsView && msg.String() == "f" {
+			if pr, ok := currRowData.(*prrow.Data); ok && pr.Primary != nil {
+				m.prActionMenu = NewPRActionMenu(fmt.Sprintf("%s #%d", pr.GetRepoNameWithOwner(), pr.Primary.Number))
+			}
+			return m, nil
+		}
 		switch {
 		case m.isUserDefinedKeybinding(msg):
 			cmd = m.executeKeybinding(msg.String())
@@ -265,6 +314,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			prevSection := m.getSectionAt(m.getPrevSectionId())
 			if prevSection != nil {
 				m.setCurrSectionId(prevSection.GetId())
+				m.prPreviewFocused = false
 				cmd = m.onViewedRowChanged()
 			}
 
@@ -273,6 +323,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			nextSection := m.getSectionAt(nextSectionId)
 			if nextSection != nil {
 				m.setCurrSectionId(nextSection.GetId())
+				m.prPreviewFocused = false
 				cmd = m.onViewedRowChanged()
 			}
 
@@ -310,6 +361,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, m.keys.TogglePreview):
 			m.sidebar.IsOpen = !m.sidebar.IsOpen
+			if !m.sidebar.IsOpen {
+				m.prPreviewFocused = false
+			}
 			m.syncMainContentDimensions()
 
 		case key.Matches(msg, m.keys.TogglePreviewPosition):
@@ -894,6 +948,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case updateFooterMsg:
 		cmds = append(cmds, cmd, m.doUpdateFooterAtInterval())
 
+	case prPromptCopiedMsg:
+		cmds = append(cmds, m.notify("Copied fix prompt to clipboard"))
+
 	case constants.ErrMsg:
 		m.ctx.Error = msg.Err
 	}
@@ -1033,6 +1090,12 @@ func (m *Model) View() tea.View {
 		layers = append(layers, lipgloss.NewLayer(issueCmp).X(previewPos.X+3).Y(y))
 	}
 
+	if m.prActionMenu != nil {
+		menu := m.prActionMenu.View()
+		layers = append(layers, lipgloss.NewLayer(menu).
+			X(max(0, (m.ctx.ScreenWidth-lipgloss.Width(menu))/2)).
+			Y(max(0, (m.ctx.ScreenHeight-lipgloss.Height(menu))/2)))
+	}
 	comp := lipgloss.NewCompositor(layers...)
 	v.SetContent(comp.Render())
 
@@ -1577,6 +1640,7 @@ func (m *Model) updateTabs() {
 }
 
 func (m *Model) switchSelectedView() tea.Cmd {
+	m.prPreviewFocused = false
 	repoFF := config.IsFeatureEnabled(config.FF_REPO_VIEW)
 
 	// Reset notification subject when leaving notifications view
